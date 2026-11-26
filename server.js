@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 const express = require("express");
 const crypto = require("crypto");
@@ -17,13 +18,16 @@ app.post(
         .digest("base64");
 
       const valid =
-        hmac &&
+        typeof hmac === "string" &&
+        Buffer.byteLength(hmac) === Buffer.byteLength(digest) &&
         crypto.timingSafeEqual(
           Buffer.from(hmac),
           Buffer.from(digest)
         );
 
-      if (!valid) return res.sendStatus(401);
+      if (!valid) {
+        return res.sendStatus(401);
+      }
 
       const order = JSON.parse(req.body.toString());
 
@@ -36,20 +40,26 @@ app.post(
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            events: [{
-              id: `order_${order.id}`,
-              type: "order_created",
-              timestamp_ms: Date.now(),
-              action_source: "web",
-              source_url: order.order_status_url || order.checkout_id
-                ? `https://${order.domain || "nuviekids.com"}/`
-                : `https://${order.domain || "nuviekids.com"}/`,
-              data: {
-                type: "contents",
-                amount: Math.round(Number(order.current_total_price || order.total_price) * 100),
-                currency: order.currency
+            events: [
+              {
+                id: `order_${order.id}`,
+                type: "order_created",
+                timestamp_ms: Date.now(),
+                action_source: "web",
+                source_url:
+                  order.order_status_url ||
+                  `https://${order.domain || "nuviekids.com"}/`,
+                data: {
+                  type: "contents",
+                  amount: Math.round(
+                    Number(
+                      order.current_total_price || order.total_price
+                    ) * 100
+                  ),
+                  currency: order.currency
+                }
               }
-            }]
+            ]
           })
         }
       );
@@ -59,7 +69,9 @@ app.post(
       }
 
       res.send("Purchase event sent");
+
     } catch (error) {
+      console.error("Tracking error:", error);
       res.sendStatus(500);
     }
   }
@@ -68,3 +80,4 @@ app.post(
 app.listen(process.env.PORT || 3000, () => {
   console.log("Purchase tracking server running");
 });
+
